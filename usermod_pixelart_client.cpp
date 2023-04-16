@@ -386,7 +386,7 @@ static uint16_t mode_pixelart(void) {
 		// Serial.println(!enabled);
 		// Serial.println(strip.isUpdating());
 		// Serial.println(!strip.isMatrix);
-		if (!enabled || strip.isUpdating() || !strip.isMatrix)		return;
+		if (!enabled || !strip.isMatrix)		return;
 
 		if (!serverUp && ((millis() - lastRequestTime) > serverTestRepeatTime * 1000)) {
 			lastRequestTime = millis();
