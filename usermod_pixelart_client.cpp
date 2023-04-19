@@ -178,8 +178,93 @@ static uint16_t mode_pixelart(void) {
 		Serial.print("parseResponse() start: remaining heap: ");
 		Serial.println(ESP.getFreeHeap(), DEC);
 
-		DynamicJsonDocument doc(65536);
-		DeserializationError error = deserializeJson(doc, http.getStream());
+		DynamicJsonDocument doc(1024);
+		Stream& client = http.getStream();
+
+		client.find("\"meta\"");
+		client.find(":");			
+		// meta
+		DeserializationError error = deserializeJson(doc, client);
+		
+		if (error)
+		{
+			Serial.print("deserializeJson() failed: ");
+			Serial.println(error.c_str());
+			imageLoaded = false;
+			return;
+		}
+
+		const int totalFrames = doc["frames"];
+		const int returnHeight = doc["height"];
+		const int returnWidth = doc["width"];
+		const char *path = doc["path"]; // "ms-pacman.gif"
+		name = String(path);
+		
+		Serial.print("nextImage.resize: ");
+		Serial.println(totalFrames);
+		(*nextImage).resize(totalFrames);
+
+		Serial.print("nextImage.size: ");
+		Serial.println((*nextImage).size());
+
+		for (size_t i = 0; i < totalFrames; i++)
+		{
+			(*nextImage)[i].resize(returnHeight);
+			Serial.print("nextImage[i].resize: ");
+			Serial.println(returnHeight);
+			for (size_t j = 0; j < returnHeight; j++) {
+				Serial.print("nextImage[i][j].resize: ");
+				Serial.println(returnWidth);
+				(*nextImage)[i][j].resize(returnWidth);
+			}
+		}
+		
+		nextImageDurations->resize(totalFrames);
+
+		client.find("\"rows\"");
+		client.find("[");			
+		do {
+			DeserializationError error = deserializeJson(doc, client);
+			// ...extract values from the document...
+
+			// Serial.print("pixelsJson.size: ");
+			// Serial.println(rowPixels.size());
+
+			// read row metadata
+			int frame_duration = doc["duration"]; // 200, 200, 200
+			int frameIndex = doc["frame"]; // 200, 200, 200
+			(*nextImageDurations)[frameIndex] = frame_duration;
+			int rowIndex = doc["row"]; // 200, 200, 200
+
+			//const JsonArray rows = frame["pixels"];
+			
+			JsonArray rowPixels = doc["pixels"].as<JsonArray>();
+			int colIndex = 0;
+
+		
+			(*nextImage)[frameIndex][rowIndex].resize(returnWidth);
+
+			for (JsonVariant pixel : rowPixels)
+			{
+				const char *pixelStr = (pixel.as<const char *>());
+				const CRGB color = hexToCRGB(String(pixelStr));
+				// Serial.print("frame, row, col, framesize, rowSize:  ");
+				// Serial.print(frameIndex);
+				// Serial.print(", ");
+				// Serial.print(rowIndex);
+				// Serial.print(", ");
+				// Serial.print(colIndex);
+				// Serial.print(", ");
+				// Serial.print((*nextImage)[frameIndex].size());
+				// Serial.print(", ");
+				// Serial.println((*nextImage)[frameIndex][rowIndex].size());
+				(*nextImage)[frameIndex][rowIndex][colIndex] = color;
+				colIndex++;
+			}
+	
+		}
+		while (client.findUntil(",", "]"));
+
 		// Free resources
 		http.end();
 
@@ -191,47 +276,46 @@ static uint16_t mode_pixelart(void) {
 			return;
 		}
 
-		const char *path = doc["path"]; // "ms-pacman.gif"
-		name = String(path);
-		imageDuration = doc["duration"];		// 10
-		JsonArray framesJson = doc["frames"].as<JsonArray>();
-		Serial.print("framesJson.size: ");
-		Serial.println(framesJson.size());
+		 nextImageFrameCount = totalFrames;
+
+		// imageDuration = doc["duration"];		// 10
+		// JsonArray framesJson = doc["frames"].as<JsonArray>();
+		// Serial.print("framesJson.size: ");
+		// Serial.println(framesJson.size());
+
 
 		// Once the values have been parsed, resize the frames vector to the appropriate size
-		const int totalFrames = framesJson.size();
-		nextImage->resize(totalFrames);
-		nextImageDurations->resize(totalFrames);
+	
 
-		int frameIndex = 0;
-		for (JsonObject frame : framesJson)
-		{
-			// parse a frame, which is rows > column nested arrays
+		// int frameIndex = 0;
+		// for (JsonObject frame : framesJson)
+		// {
+		// 	// parse a frame, which is rows > column nested arrays
 
-			int frame_duration = frame["duration"]; // 200, 200, 200
-			const JsonArray rows = frame["pixels"];
-			int totalRows = rows.size();
-			int rowIndex = 0;
-			(*nextImageDurations)[frameIndex] = frame_duration;
-			(*nextImage)[frameIndex].resize(totalRows);
+		// 	int frame_duration = frame["duration"]; // 200, 200, 200
+		// 	const JsonArray rows = frame["pixels"];
+		// 	int totalRows = rows.size();
+		// 	int rowIndex = 0;
+		// 	(*nextImageDurations)[frameIndex] = frame_duration;
+		// 	(*nextImage)[frameIndex].resize(totalRows);
 
-			for (JsonArray column : rows)
-			{
-				// int totalColumns = column.size();
-				int colIndex = 0;
-				(*nextImage)[frameIndex][rowIndex].resize(totalRows);
-				for (JsonVariant pixel : column)
-				{
-					const char *pixelStr = (pixel.as<const char *>());
-					const CRGB color = hexToCRGB(String(pixelStr));
-					(*nextImage)[frameIndex][rowIndex][colIndex] = color;
-					colIndex++;
-				}
-				rowIndex++;
-			}
-			frameIndex++;
-		}
-		nextImageFrameCount = totalFrames;
+		// 	for (JsonArray column : rows)
+		// 	{
+		// 		// int totalColumns = column.size();
+		// 		int colIndex = 0;
+		// 		(*nextImage)[frameIndex][rowIndex].resize(totalRows);
+		// 		for (JsonVariant pixel : column)
+		// 		{
+		// 			const char *pixelStr = (pixel.as<const char *>());
+		// 			const CRGB color = hexToCRGB(String(pixelStr));
+		// 			(*nextImage)[frameIndex][rowIndex][colIndex] = color;
+		// 			colIndex++;
+		// 		}
+		// 		rowIndex++;
+		// 	}
+		// 	frameIndex++;
+		// }
+		// nextImageFrameCount = totalFrames;
 
 		Serial.print("parseResponse() done: remaining heap: ");
 		Serial.println(ESP.getFreeHeap(), DEC);
