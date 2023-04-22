@@ -29,8 +29,7 @@ These instructions assume that you are already comfortable with compiling WLED f
 
     ```
     #ifdef PIXELART_CLIENT_ENABLED
-    #include <HTTPClient.h>
-    #include "../usermods/pixelart_client/usermod_pixelart_client.cpp"
+	usermods.add(new PixelArtClient());
     #endif
     ```
 

@@ -47,6 +47,7 @@ private:
 	// set your config variables to their boot default value (this can also be done in readFromConfig() or a constructor if you prefer)
 	String serverName = "http://192.168.0.1/";
 	String clientName = "WLED";
+	bool transparency = false;
 	bool serverUp = false;
 	int serverTestRepeatTime = 10;
 
@@ -69,6 +70,8 @@ private:
 	// need a struct to hold all this (pixels, frameCount, frame timings )
 	int nextImageFrameCount = 1;
 	int currentImageFrameCount = 1;
+	CRGB nextImageBackgroundColour;
+	CRGB currentImageBackgroundColour;
 	int numFrames;
 
 	int currentFrameIndex = 0;
@@ -195,6 +198,7 @@ static uint16_t mode_pixelart(void) {
 		}
 
 		const int totalFrames = doc["frames"];
+		nextImageBackgroundColour = hexToCRGB(doc["backgroundColor"]);
 		const int returnHeight = doc["height"];
 		const int returnWidth = doc["width"];
 		const char *path = doc["path"]; // "ms-pacman.gif"
@@ -366,6 +370,7 @@ static uint16_t mode_pixelart(void) {
 				nextImage = imageIndex ? &image2 : &image1;
 				nextImageDurations = imageIndex ? &image2durations : &image1durations;
 				currentImageFrameCount = nextImageFrameCount;
+				currentImageBackgroundColour = nextImageBackgroundColour;
 
 				currentFrameIndex = 0;
 				currentFrame = (*currentImage)[currentFrameIndex];
@@ -488,7 +493,7 @@ static uint16_t mode_pixelart(void) {
 		}
 	}
 
-	void setPixelsFrom2DVector(const std::vector<std::vector<CRGB>> &pixelValues)
+	void setPixelsFrom2DVector(const std::vector<std::vector<CRGB>> &pixelValues, CRGB backgroundColour)
 	{
 
 		// iterate through the 2D vector of CRGB values
@@ -498,14 +503,14 @@ static uint16_t mode_pixelart(void) {
 			int whichCol = 0;
 			for (CRGB pixel : row)
 			{
-				strip.setPixelColorXY(whichRow, whichCol, pixel);
+				if (pixel != backgroundColour || !transparency) strip.setPixelColorXY(whichRow, whichCol, pixel);
 				whichCol++;
 			}
 			whichRow++;
 		}
 	}
 
-	void setPixelsFrom2DVector(const std::vector<std::vector<CRGB>> &currentPixels, const std::vector<std::vector<CRGB>> &nextPixels, const int blendPercent)
+	void setPixelsFrom2DVector(const std::vector<std::vector<CRGB>> &currentPixels, const std::vector<std::vector<CRGB>> &nextPixels, const int blendPercent, CRGB backgroundColour)
 	{
 
 		// iterate through the 2D vector of CRGB values
@@ -516,7 +521,7 @@ static uint16_t mode_pixelart(void) {
 			for (CRGB pixel : row)
 			{
 				const CRGB targetPixel = nextFrame[whichRow][whichCol];
-				strip.setPixelColorXY(whichRow, whichCol, blend(pixel, targetPixel, blendPercent));
+				if ((pixel != backgroundColour || targetPixel!=backgroundColour) || !transparency) strip.setPixelColorXY(whichRow, whichCol, blend(pixel, targetPixel, blendPercent));
 				whichCol++;
 			}
 			whichRow++;
@@ -626,6 +631,7 @@ static uint16_t mode_pixelart(void) {
 		// save these vars persistently whenever settings are saved
 		top["server url"] = serverName;
 		top["client id"] = clientName;
+		top["transparent"] = transparency;
 	}
 
 	/*
@@ -655,6 +661,7 @@ static uint16_t mode_pixelart(void) {
 		configComplete &= getJsonValue(top["enabled"], enabled);
 		configComplete &= getJsonValue(top["server url"], serverName);
 		configComplete &= getJsonValue(top["client id"], clientName);
+		configComplete &= getJsonValue(top["transparent"], transparency);
 		return configComplete;
 	}
 
@@ -667,6 +674,7 @@ static uint16_t mode_pixelart(void) {
 	{
 		oappend(SET_F("addInfo('PixelArtClient:server url', 1, '');"));
 		oappend(SET_F("addInfo('PixelArtClient:client id', 1, '');"));
+		oappend(SET_F("addField('PixelArtClient:transparent', 1, true);"));
 	}
 
 	/*
@@ -699,7 +707,7 @@ static uint16_t mode_pixelart(void) {
 		}
 
 			if (nextBlend > 0) {
-					setPixelsFrom2DVector(currentFrame, nextFrame, nextBlend);
+					setPixelsFrom2DVector(currentFrame, nextFrame, nextBlend, currentImageBackgroundColour);
 					nextBlend += crossfadeIncrement;
 				// while(nextBlend<=255) {
 
@@ -712,7 +720,7 @@ static uint16_t mode_pixelart(void) {
 				}
 				 
 			} else {
-				setPixelsFrom2DVector(currentFrame);
+				setPixelsFrom2DVector(currentFrame, currentImageBackgroundColour);
 
 			}
 
