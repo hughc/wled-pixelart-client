@@ -7,6 +7,7 @@
 #include <wled.h>
 #include <FX.h>
 
+
 #include <HTTPClient.h>
 
 #include <stdio.h>
@@ -153,6 +154,7 @@ private:
 
 	// set your config variables to their boot default value (this can also be done in readFromConfig() or a constructor if you prefer)
 	String serverName = "http://192.168.0.1/";
+	String apiKey = "your_api_key";
 	String clientName = "WLED";
 	bool transparency = false;
 	bool serverUp = false;
@@ -236,6 +238,10 @@ public:
 	//   if (!isExampleEnabled) UM->enable(true);
 	//   #endif
 
+
+
+
+
 	static uint16_t dummyEffect()
 	{
 		return FRAMETIME;
@@ -254,10 +260,13 @@ public:
 		nextImage = imageIndex ? &image2 : &image1;
 		currentImageDurations = imageIndex ? &image1durations : &image2durations;
 		nextImageDurations = imageIndex ? &image2durations : &image1durations;
+		const String serverPath = "api/image/pixels";
+		const String clientPhrase = "id=" + clientName;
+		const String keyPhrase = "&key=" + apiKey;
 
 		const String width = String(strip._segments[strip.getCurrSegmentId()].maxWidth);
 		const String height = String(strip._segments[strip.getCurrSegmentId()].maxHeight);
-		const String getUrl = serverName + (serverName.endsWith("/") ? "image?id=" : "/image?id=") + clientName + "&width=" + width + "&height=" + height;
+		const String getUrl = serverName + (serverName.endsWith("/") ? "" : "/") + serverPath + "?" + clientPhrase + keyPhrase + "&width=" + width + "&height=" + height;
 		;
 
 		Serial.print("requestImageFrames: ");
@@ -355,17 +364,7 @@ public:
 			for (JsonVariant pixel : rowPixels)
 			{
 				const char *pixelStr = (pixel.as<const char *>());
-				const CRGBA color = hexToCRGBA(String(pixelStr));
-				// Serial.print("frame, row, col, framesize, rowSize:  ");
-				// Serial.print(frameIndex);
-				// Serial.print(", ");
-				// Serial.print(rowIndex);
-				// Serial.print(", ");
-				// Serial.print(colIndex);
-				// Serial.print(", ");
-				// Serial.print((*nextImage)[frameIndex].size());
-				// Serial.print(", ");
-				// Serial.println((*nextImage)[frameIndex][rowIndex].size());
+				const CRGBA color = hexToCRGBA(String(pixelStr));\
 				(*nextImage)[frameIndex][rowIndex][colIndex] = color;
 				colIndex++;
 			}
@@ -548,7 +547,7 @@ public:
 	{
 		const String width = String(strip._segments[strip.getCurrSegmentId()].maxWidth);
 		const String height = String(strip._segments[strip.getCurrSegmentId()].maxHeight);
-		const String getUrl = serverName + (serverName.endsWith("/") ? "checkin?id=" : "/checkin?id=") + clientName + "&width=" + width + "&height=" + height;
+		const String getUrl = serverName + (serverName.endsWith("/") ? "api/client/checkin?id=" : "/api/client/checkin?id=") + clientName + "&width=" + width + "&height=" + height;
 		Serial.println(getUrl);
 		http.begin((getUrl).c_str());
 
@@ -596,7 +595,7 @@ public:
 		// Serial.println(!enabled);
 		// Serial.println(strip.isUpdating());
 		// Serial.println(!strip.isMatrix);
-		if (!enabled || !strip.isMatrix)
+		if (!enabled || !strip.isMatrix) 
 			return;
 
 		if (!serverUp && ((millis() - lastRequestTime) > serverTestRepeatTime * 1000))
@@ -773,6 +772,7 @@ public:
 		top[FPSTR(_enabled)] = enabled;
 		// save these vars persistently whenever settings are saved
 		top["server url"] = serverName;
+		top["api key"] = apiKey;
 		top["client id"] = clientName;
 		top["transparent"] = transparency;
 	}
