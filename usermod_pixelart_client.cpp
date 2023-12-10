@@ -153,7 +153,7 @@ private:
 	unsigned long lastRequestTime = 0;
 
 	// set your config variables to their boot default value (this can also be done in readFromConfig() or a constructor if you prefer)
-	String serverName = "http://192.168.0.1/";
+	String serverName = "https://app.pixelart-exchange.au/";
 	String apiKey = "your_api_key";
 	String clientName = "WLED";
 	bool transparency = false;
