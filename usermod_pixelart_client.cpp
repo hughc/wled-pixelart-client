@@ -39,6 +39,114 @@
  * 2. Register the usermod by adding #include "usermod_filename.h" in the top and registerUsermod(new MyUsermodClass()) in the bottom of usermods_list.cpp
  */
 
+/// Representation of an RGBA pixel (Red, Green, Blue, Alpha)
+struct CRGBA
+{
+	union
+	{
+		struct
+		{
+			union
+			{
+				uint8_t r;
+				uint8_t red;
+			};
+			union
+			{
+				uint8_t g;
+				uint8_t green;
+			};
+			union
+			{
+				uint8_t b;
+				uint8_t blue;
+			};
+			union
+			{
+				uint8_t a;
+				uint8_t alpha;
+			};
+		};
+		uint8_t raw[4];
+	};
+
+	/// allow copy construction
+	inline CRGBA(const CRGBA &rhs) __attribute__((always_inline)) = default;
+
+    /// allow assignment from one RGB struct to another
+	inline CRGBA& operator= (const CRGBA& rhs) __attribute__((always_inline)) = default;
+
+	// default values are UNINITIALIZED
+	inline CRGBA() __attribute__((always_inline)) = default;
+
+	/// allow construction from R, G, B, A
+	inline CRGBA(uint8_t ir, uint8_t ig, uint8_t ib, uint8_t ia) __attribute__((always_inline))
+		: r(ir), g(ig), b(ib), a(ia)
+	{
+	}
+
+	/// allow assignment from R, G, and B
+	inline CRGBA &setRGB(uint8_t nr, uint8_t ng, uint8_t nb) __attribute__((always_inline))
+	{
+		r = nr;
+		g = ng;
+		b = nb;
+		return *this;
+	}
+
+	CRGB toCRGB()
+	{
+		return CRGB(this->red, this->green, this->blue);
+	}
+};
+
+CRGBA &nblend_a(CRGBA &existing, const CRGBA &overlay, fract8 amountOfOverlay)
+{
+	if (amountOfOverlay == 0)
+	{
+		return existing;
+	}
+
+	if (amountOfOverlay == 255)
+	{
+		existing = overlay;
+		return existing;
+	}
+
+	// Corrected blend method, with no loss-of-precision rounding errors
+	existing.red = blend8(existing.red, overlay.red, amountOfOverlay);
+	existing.green = blend8(existing.green, overlay.green, amountOfOverlay);
+	existing.blue = blend8(existing.blue, overlay.blue, amountOfOverlay);
+	existing.alpha = blend8(existing.alpha, overlay.alpha, amountOfOverlay);
+
+	return existing;
+}
+
+CRGBA blend_a(const CRGBA &p1, const CRGBA &p2, fract8 amountOfP2)
+{
+	CRGBA nu(p1);
+	nblend_a(nu, p2, amountOfP2);
+	return nu;
+}
+
+CRGB flatten(CRGBA &overlay, CRGB &existing)
+{
+	int const amountOfOverlay = overlay.alpha;
+	if (amountOfOverlay == 0)
+	{
+		return existing;
+	}
+
+	if (amountOfOverlay == 255)
+	{
+		return overlay.toCRGB();
+	}
+	// Corrected blend method, with no loss-of-precision rounding errors
+	CRGB rCRGB = CRGB( blend8(existing.red, overlay.red, amountOfOverlay), blend8(existing.green, overlay.green, amountOfOverlay), blend8(existing.blue, overlay.blue, amountOfOverlay));
+
+	return rCRGB;
+}
+
 // class name. Use something descriptive and leave the ": public Usermod" part :)
 class PixelArtClient : public Usermod
 {
@@ -51,7 +159,8 @@ private:
 	unsigned long lastRequestTime = 0;
 
 	// set your config variables to their boot default value (this can also be done in readFromConfig() or a constructor if you prefer)
-	String serverName = "http://192.168.0.1/";
+	String serverName = "https://app.pixelart-exchange.au/";
+	String apiKey = "your_api_key";
 	String clientName = "WLED";
 	bool transparency = false;
 	bool serverUp = false;
@@ -63,16 +172,16 @@ private:
 	int8_t testPins[2];
 	int crossfadeIncrement = 10;
 	int crossfadeFrameRate = 40;
-	std::vector<std::vector<std::vector<CRGB>>> image1;
-	std::vector<std::vector<std::vector<CRGB>>> image2;
+	std::vector<std::vector<std::vector<CRGBA>>> image1;
+	std::vector<std::vector<std::vector<CRGBA>>> image2;
 	std::vector<int> image1durations;
 	std::vector<int> image2durations;
-	
-	std::vector<std::vector<std::vector<CRGB>>>* currentImage;
-	std::vector<std::vector<std::vector<CRGB>>>* nextImage;
-	std::vector<int>* nextImageDurations;
-	std::vector<int>* currentImageDurations;
-	
+
+	std::vector<std::vector<std::vector<CRGBA>>> *currentImage;
+	std::vector<std::vector<std::vector<CRGBA>>> *nextImage;
+	std::vector<int> *nextImageDurations;
+	std::vector<int> *currentImageDurations;
+
 	// need a struct to hold all this (pixels, frameCount, frame timings )
 	int nextImageFrameCount = 1;
 	int currentImageFrameCount = 1;
@@ -82,12 +191,11 @@ private:
 
 	int currentFrameIndex = 0;
 	// within the image, we may have one or more frames
-	std::vector<std::vector<CRGB>> currentFrame;
-	unsigned int currentFrameDuration;
+	std::vector<std::vector<CRGBA>> currentFrame;
+ unsigned int currentFrameDuration;
 	// within the next image,cache the first frame for a transition
-	std::vector<std::vector<CRGB>> nextFrame;
+	std::vector<std::vector<CRGBA>> nextFrame;
 	int nextBlend = 0;
-
 
 	// time betwwen images
 	int duration;
@@ -141,13 +249,15 @@ public:
 
 
 
-static uint16_t dummyEffect() {
-  return FRAMETIME;
-}
+	static uint16_t dummyEffect()
+	{
+		return FRAMETIME;
+	}
 
-static uint16_t mode_pixelart(void) {
-	return PixelArtClient::dummyEffect();
-}
+	static uint16_t mode_pixelart(void)
+	{
+		return PixelArtClient::dummyEffect();
+	}
 
 	void requestImageFrames()
 	{
@@ -158,10 +268,13 @@ static uint16_t mode_pixelart(void) {
 		nextImage = imageIndex ? &image2 : &image1;
 		currentImageDurations = imageIndex ? &image1durations : &image2durations;
 		nextImageDurations = imageIndex ? &image2durations : &image1durations;
+		const String serverPath = "api/image/pixels";
+		const String clientPhrase = "screen_id=" + clientName;
+		const String keyPhrase = "&key=" + apiKey;
 
 		const String width = String(strip._segments[strip.getCurrSegmentId()].maxWidth);
 		const String height = String(strip._segments[strip.getCurrSegmentId()].maxHeight);
-		const String getUrl = serverName + (serverName.endsWith("/") ? "image?id=" : "/image?id=") + clientName + "&width=" + width + "&height=" + height;
+		const String getUrl = serverName + (serverName.endsWith("/") ? "" : "/") + serverPath + "?" + clientPhrase + keyPhrase + "&width=" + width + "&height=" + height;
 		;
 
 		Serial.print("requestImageFrames: ");
@@ -173,29 +286,29 @@ static uint16_t mode_pixelart(void) {
 		int httpResponseCode = http.GET();
 		// Serial.print("HTTP Response code: ");
 		// Serial.println(httpResponseCode);
-		if (httpResponseCode != 200) {
+		if (httpResponseCode != 200)
+		{
 			Serial.print("image fetch failed, request returned code ");
 			Serial.println(httpResponseCode);
 			http.end();
 			return;
 		}
-		//payload = http.getStream();
+		// payload = http.getStream();
 
-		//Serial.print("total stream length: ");
-		//Serial.println(http.getString().length());
-	
-	
-		Serial.print("parseResponse() start: remaining heap: ");
-		Serial.println(ESP.getFreeHeap(), DEC);
+		// Serial.print("total stream length: ");
+		// Serial.println(http.getString().length());
 
-		DynamicJsonDocument doc(1024);
-		Stream& client = http.getStream();
+		// Serial.print("parseResponse() start: remaining heap: ");
+		// Serial.println(ESP.getFreeHeap(), DEC);
+
+		DynamicJsonDocument doc(2048);
+		Stream &client = http.getStream();
 
 		client.find("\"meta\"");
-		client.find(":");			
+		client.find(":");
 		// meta
 		DeserializationError error = deserializeJson(doc, client);
-		
+
 		if (error)
 		{
 			Serial.print("deserializeJson() failed: ");
@@ -210,7 +323,7 @@ static uint16_t mode_pixelart(void) {
 		const unsigned int returnWidth = doc["width"];
 		const char *path = doc["path"]; // "ms-pacman.gif"
 		name = String(path);
-		
+
 		Serial.print("nextImage.resize: ");
 		Serial.println(totalFrames);
 		(*nextImage).resize(totalFrames);
@@ -223,18 +336,20 @@ static uint16_t mode_pixelart(void) {
 			(*nextImage)[i].resize(returnHeight);
 			Serial.print("nextImage[i].resize: ");
 			Serial.println(returnHeight);
-			for (size_t j = 0; j < returnHeight; j++) {
+			for (size_t j = 0; j < returnHeight; j++)
+			{
 				Serial.print("nextImage[i][j].resize: ");
 				Serial.println(returnWidth);
 				(*nextImage)[i][j].resize(returnWidth);
 			}
 		}
-		
+
 		nextImageDurations->resize(totalFrames);
 
 		client.find("\"rows\"");
-		client.find("[");			
-		do {
+		client.find("[");
+		do
+		{
 			DeserializationError error = deserializeJson(doc, client);
 			// ...extract values from the document...
 
@@ -243,38 +358,26 @@ static uint16_t mode_pixelart(void) {
 
 			// read row metadata
 			int frame_duration = doc["duration"]; // 200, 200, 200
-			int frameIndex = doc["frame"]; // 200, 200, 200
+			int frameIndex = doc["frame"];		  // 200, 200, 200
 			(*nextImageDurations)[frameIndex] = frame_duration;
 			int rowIndex = doc["row"]; // 200, 200, 200
 
-			//const JsonArray rows = frame["pixels"];
-			
+			// const JsonArray rows = frame["pixels"];
+
 			JsonArray rowPixels = doc["pixels"].as<JsonArray>();
 			int colIndex = 0;
 
-		
 			(*nextImage)[frameIndex][rowIndex].resize(returnWidth);
 
 			for (JsonVariant pixel : rowPixels)
 			{
 				const char *pixelStr = (pixel.as<const char *>());
-				const CRGB color = hexToCRGB(String(pixelStr));
-				// Serial.print("frame, row, col, framesize, rowSize:  ");
-				// Serial.print(frameIndex);
-				// Serial.print(", ");
-				// Serial.print(rowIndex);
-				// Serial.print(", ");
-				// Serial.print(colIndex);
-				// Serial.print(", ");
-				// Serial.print((*nextImage)[frameIndex].size());
-				// Serial.print(", ");
-				// Serial.println((*nextImage)[frameIndex][rowIndex].size());
+				const CRGBA color = hexToCRGBA(String(pixelStr));\
 				(*nextImage)[frameIndex][rowIndex][colIndex] = color;
 				colIndex++;
 			}
-	
-		}
-		while (client.findUntil(",", "]"));
+
+		} while (client.findUntil(",", "]"));
 
 		// Free resources
 		http.end();
@@ -287,16 +390,14 @@ static uint16_t mode_pixelart(void) {
 			return;
 		}
 
-		 nextImageFrameCount = totalFrames;
+		nextImageFrameCount = totalFrames;
 
 		// imageDuration = doc["duration"];		// 10
 		// JsonArray framesJson = doc["frames"].as<JsonArray>();
 		// Serial.print("framesJson.size: ");
 		// Serial.println(framesJson.size());
 
-
 		// Once the values have been parsed, resize the frames vector to the appropriate size
-	
 
 		// int frameIndex = 0;
 		// for (JsonObject frame : framesJson)
@@ -332,9 +433,9 @@ static uint16_t mode_pixelart(void) {
 		Serial.println(ESP.getFreeHeap(), DEC);
 		imageLoaded = true;
 
-		 Serial.print("requestImageFrames finished, remaining heap: ");
-		 Serial.println(ESP.getFreeHeap(), DEC);
-		//return payload;
+		Serial.print("requestImageFrames finished, remaining heap: ");
+		Serial.println(ESP.getFreeHeap(), DEC);
+		// return payload;
 	}
 
 	CRGB hexToCRGB(String hexString)
@@ -352,6 +453,22 @@ static uint16_t mode_pixelart(void) {
 
 		return color;
 	}
+	CRGBA hexToCRGBA(String hexString)
+	{
+		// Convert the hex string to an integer value
+		uint32_t hexValue = strtoul(hexString.c_str(), NULL, 16);
+
+		// Extract the red, green, and blue components from the hex value
+		uint8_t red = (hexValue >> 24) & 0xFF;
+		uint8_t green = (hexValue >> 16) & 0xFF;
+		uint8_t blue = (hexValue >> 8) & 0xFF;
+		uint8_t alpha = hexValue & 0xFF;
+
+		// Create a CRGB object with the extracted components
+		CRGBA color = CRGBA(red, green, blue, alpha);
+
+		return color;
+	}
 
 	void parseResponse(std::vector<std::vector<std::vector<CRGB>>> &frames, const Stream &response, String playlist, String &pathStr, int &durationInt)
 	{
@@ -361,27 +478,27 @@ static uint16_t mode_pixelart(void) {
 
 		// char* input;
 		// size_t inputLength; (optional)
-
 	}
 
-	void completeImageTransition() {
-		
-				// flip to the next image for the next request
-				imageIndex = imageIndex == 0 ? 1 : 0;
-				// and flip which image is which, so nextImage -> currentImage
-				// used in next redraw
-				currentImage = imageIndex ? &image1 : &image2;
-				currentImageDurations = imageIndex ? &image1durations : &image2durations;
+	void completeImageTransition()
+	{
 
-				// reuse this for the next image load
-				nextImage = imageIndex ? &image2 : &image1;
-				nextImageDurations = imageIndex ? &image2durations : &image1durations;
-				currentImageFrameCount = nextImageFrameCount;
-				currentImageBackgroundColour = nextImageBackgroundColour;
+		// flip to the next image for the next request
+		imageIndex = imageIndex == 0 ? 1 : 0;
+		// and flip which image is which, so nextImage -> currentImage
+		// used in next redraw
+		currentImage = imageIndex ? &image1 : &image2;
+		currentImageDurations = imageIndex ? &image1durations : &image2durations;
 
-				currentFrameIndex = 0;
-				currentFrame = (*currentImage)[currentFrameIndex];
-				currentFrameDuration = (*currentImageDurations)[currentFrameIndex];
+		// reuse this for the next image load
+		nextImage = imageIndex ? &image2 : &image1;
+		nextImageDurations = imageIndex ? &image2durations : &image1durations;
+		currentImageFrameCount = nextImageFrameCount;
+		currentImageBackgroundColour = nextImageBackgroundColour;
+
+		currentFrameIndex = 0;
+		currentFrame = (*currentImage)[currentFrameIndex];
+		currentFrameDuration = (*currentImageDurations)[currentFrameIndex];
 	}
 
 	void getImage()
@@ -396,26 +513,27 @@ static uint16_t mode_pixelart(void) {
 		Serial.print("getImage() after requestImageFrames: remaining heap: ");
 		Serial.println(ESP.getFreeHeap(), DEC);
 
-		//parseResponse(frames, rawResponse, playlist, name, duration);
-		
-		    Serial.print("requestImageFrames new image: ");
-		    Serial.println(name);
+		// parseResponse(frames, rawResponse, playlist, name, duration);
+
+		Serial.print("requestImageFrames new image: ");
+		Serial.println(name);
 
 		// prime these for next redraw
-		if (imageLoaded) {
-			if (image1.size()> 0 && image2.size() > 0) {
+		if (imageLoaded)
+		{
+			if (image1.size() > 0 && image2.size() > 0)
+			{
 				// we have 2 images, crossfade them
 				nextBlend = crossfadeIncrement;
 				nextFrame = (*nextImage)[0];
-			} else {
+			}
+			else
+			{
 				// first load? just show it;
 				completeImageTransition();
 			}
 		}
 	}
-
-
-
 
 	// methods called by WLED (can be inlined as they are called only once but if you call them explicitly define them out of class)
 
@@ -437,17 +555,20 @@ static uint16_t mode_pixelart(void) {
 	{
 		const String width = String(strip._segments[strip.getCurrSegmentId()].maxWidth);
 		const String height = String(strip._segments[strip.getCurrSegmentId()].maxHeight);
-		const String getUrl = serverName + (serverName.endsWith("/") ? "checkin?id=" : "/checkin?id=") + clientName + "&width=" + width + "&height=" + height;
+		const String getUrl = serverName + (serverName.endsWith("/") ? "api/client/checkin?id=" : "/api/client/checkin?id=") + clientName + "&width=" + width + "&height=" + height;
 		Serial.println(getUrl);
 		http.begin(client, (getUrl).c_str());
 
 		// Send HTTP GET request
 		int httpResponseCode = http.GET();
 		serverUp = (httpResponseCode == 200);
-		if (!serverUp) {
+		if (!serverUp)
+		{
 			Serial.print("Pixel art client failed to checkin, request returned ");
 			Serial.println(httpResponseCode);
-		} else {
+		}
+		else
+		{
 			Serial.print("Pixel art client checked in OK");
 		}
 		http.end();
@@ -482,14 +603,15 @@ static uint16_t mode_pixelart(void) {
 		// Serial.println(!enabled);
 		// Serial.println(strip.isUpdating());
 		// Serial.println(!strip.isMatrix);
-		if (!enabled || !strip.isMatrix)		return;
+		if (!enabled || !strip.isMatrix) 
+			return;
 
-		if (!serverUp && ((millis() - lastRequestTime) > serverTestRepeatTime * 1000)) {
+		if (!serverUp && ((millis() - lastRequestTime) > serverTestRepeatTime * 1000))
+		{
 			lastRequestTime = millis();
 			checkin();
 			return;
 		}
-
 
 		// request next image
 		if (millis() - lastRequestTime > imageDuration * 1000)
@@ -500,35 +622,56 @@ static uint16_t mode_pixelart(void) {
 		}
 	}
 
-	void setPixelsFrom2DVector(const std::vector<std::vector<CRGB>> &pixelValues, CRGB backgroundColour)
+	void setPixelsFrom2DVector(const std::vector<std::vector<CRGBA>> &pixelValues, CRGB backgroundColour)
 	{
 
-		// iterate through the 2D vector of CRGB values
+		// iterate through the 2D vector of CRGBA values
 		int whichRow = 0;
-		for (std::vector<CRGB> row : pixelValues)
+		for (std::vector<CRGBA> row : pixelValues)
 		{
 			int whichCol = 0;
-			for (CRGB pixel : row)
+			for (CRGBA pixel : row)
 			{
-				if (pixel != backgroundColour || !transparency) strip.setPixelColorXY(whichRow, whichCol, pixel);
+				CRGB finalColour;
+				if (transparency)
+				{
+					CRGB existing = strip.getPixelColorXY(whichRow, whichCol);
+					finalColour = flatten(pixel, existing);
+				}
+				else
+				{
+					finalColour = flatten(pixel, backgroundColour);
+				}
+				strip.setPixelColorXY(whichRow, whichCol, finalColour);
 				whichCol++;
 			}
 			whichRow++;
 		}
 	}
 
-	void setPixelsFrom2DVector(const std::vector<std::vector<CRGB>> &currentPixels, const std::vector<std::vector<CRGB>> &nextPixels, const int blendPercent, CRGB backgroundColour)
+	void setPixelsFrom2DVector(std::vector<std::vector<CRGBA>> &currentPixels, std::vector<std::vector<CRGBA>> &nextPixels, int &blendPercent, CRGB &backgroundColour)
 	{
 
 		// iterate through the 2D vector of CRGB values
 		int whichRow = 0;
-		for (std::vector<CRGB> row : currentPixels)
+		for (std::vector<CRGBA> row : currentPixels)
 		{
 			int whichCol = 0;
-			for (CRGB pixel : row)
+			for (CRGBA pixel : row)
 			{
-				const CRGB targetPixel = nextFrame[whichRow][whichCol];
-				if ((pixel != backgroundColour || targetPixel!=backgroundColour) || !transparency) strip.setPixelColorXY(whichRow, whichCol, blend(pixel, targetPixel, blendPercent));
+				const CRGBA targetPixel = nextFrame[whichRow][whichCol];
+				CRGBA newPixel = blend_a(pixel, targetPixel, blendPercent);
+				CRGB finalColour;
+				if (transparency)
+				{
+				CRGB existing = strip.getPixelColorXY(whichRow, whichCol);
+				 finalColour = flatten(newPixel, existing);
+				}
+				else
+				{
+					finalColour = flatten(newPixel, backgroundColour);
+				}
+				strip.setPixelColorXY(whichRow, whichCol, finalColour);
 				whichCol++;
 			}
 			whichRow++;
@@ -637,7 +780,8 @@ static uint16_t mode_pixelart(void) {
 		top[FPSTR(_enabled)] = enabled;
 		// save these vars persistently whenever settings are saved
 		top["server url"] = serverName;
-		top["client id"] = clientName;
+		top["api key"] = apiKey;
+		top["screen id"] = clientName;
 		top["transparent"] = transparency;
 	}
 
@@ -667,7 +811,8 @@ static uint16_t mode_pixelart(void) {
 
 		configComplete &= getJsonValue(top["enabled"], enabled);
 		configComplete &= getJsonValue(top["server url"], serverName);
-		configComplete &= getJsonValue(top["client id"], clientName);
+		configComplete &= getJsonValue(top["screen id"], clientName);
+		configComplete &= getJsonValue(top["api key"], apiKey);
 		configComplete &= getJsonValue(top["transparent"], transparency);
 		return configComplete;
 	}
@@ -680,7 +825,8 @@ static uint16_t mode_pixelart(void) {
 	void appendConfigData()
 	{
 		oappend(SET_F("addInfo('PixelArtClient:server url', 1, '');"));
-		oappend(SET_F("addInfo('PixelArtClient:client id', 1, '');"));
+		oappend(SET_F("addInfo('PixelArtClient:screen id', 1, '');"));
+		oappend(SET_F("addInfo('PixelArtClient:api key', 1, '');"));
 		oappend(SET_F("addField('PixelArtClient:transparent', 1, true);"));
 	}
 
@@ -692,45 +838,46 @@ static uint16_t mode_pixelart(void) {
 	void handleOverlayDraw()
 	{
 		// draw currently cached image again
-		if (enabled && imageLoaded) {
-			//redrawing
-			//Serial.println("handleOverlayDraw() -> redrawing");
-
-			
-		// cycle frames within a multi-frame image (ie animated gif)
-		if (millis() - refreshTime > currentFrameDuration)
+		if (enabled && imageLoaded)
 		{
-			// Serial.print("flipping frames: ");
-			// Serial.print(currentFrameIndex);
-			// Serial.print(" of ");
-			// Serial.print(currentImageFrameCount);
-			// Serial.println("");
-			refreshTime = millis();
-			currentFrameIndex++;
-			currentFrameIndex = currentFrameIndex % currentImageFrameCount;
-			// choose next frame in set to update
-			currentFrame = (*currentImage)[currentFrameIndex];
-			currentFrameDuration = (*currentImageDurations)[currentFrameIndex];
-		}
+			// redrawing
+			// Serial.println("handleOverlayDraw() -> redrawing");
 
-			if (nextBlend > 0) {
-					setPixelsFrom2DVector(currentFrame, nextFrame, nextBlend, currentImageBackgroundColour);
-					nextBlend += crossfadeIncrement;
+			// cycle frames within a multi-frame image (ie animated gif)
+			if (millis() - refreshTime > currentFrameDuration)
+			{
+				// Serial.print("flipping frames: ");
+				// Serial.print(currentFrameIndex);
+				// Serial.print(" of ");
+				// Serial.print(currentImageFrameCount);
+				// Serial.println("");
+				refreshTime = millis();
+				currentFrameIndex++;
+				currentFrameIndex = currentFrameIndex % currentImageFrameCount;
+				// choose next frame in set to update
+				currentFrame = (*currentImage)[currentFrameIndex];
+				currentFrameDuration = (*currentImageDurations)[currentFrameIndex];
+			}
+
+			if (nextBlend > 0)
+			{
+				setPixelsFrom2DVector(currentFrame, nextFrame, nextBlend, currentImageBackgroundColour);
+				nextBlend += crossfadeIncrement;
 				// while(nextBlend<=255) {
 
 				// 	busses.show();
 				// 	delay(1000/crossfadeFrameRate);
 				// }
-				if (nextBlend> 255) {
+				if (nextBlend > 255)
+				{
 					nextBlend = 0;
 					completeImageTransition();
 				}
-				 
-			} else {
-				setPixelsFrom2DVector(currentFrame, currentImageBackgroundColour);
-
 			}
-
+			else
+			{
+				setPixelsFrom2DVector(currentFrame, currentImageBackgroundColour);
+			}
 		}
 	}
 
