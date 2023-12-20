@@ -261,7 +261,7 @@ public:
 		currentImageDurations = imageIndex ? &image1durations : &image2durations;
 		nextImageDurations = imageIndex ? &image2durations : &image1durations;
 		const String serverPath = "api/image/pixels";
-		const String clientPhrase = "id=" + clientName;
+		const String clientPhrase = "screen_id=" + clientName;
 		const String keyPhrase = "&key=" + apiKey;
 
 		const String width = String(strip._segments[strip.getCurrSegmentId()].maxWidth);
@@ -773,7 +773,7 @@ public:
 		// save these vars persistently whenever settings are saved
 		top["server url"] = serverName;
 		top["api key"] = apiKey;
-		top["client id"] = clientName;
+		top["screen id"] = clientName;
 		top["transparent"] = transparency;
 	}
 
@@ -803,7 +803,8 @@ public:
 
 		configComplete &= getJsonValue(top["enabled"], enabled);
 		configComplete &= getJsonValue(top["server url"], serverName);
-		configComplete &= getJsonValue(top["client id"], clientName);
+		configComplete &= getJsonValue(top["screen id"], clientName);
+		configComplete &= getJsonValue(top["api key"], apiKey);
 		configComplete &= getJsonValue(top["transparent"], transparency);
 		return configComplete;
 	}
@@ -816,7 +817,8 @@ public:
 	void appendConfigData()
 	{
 		oappend(SET_F("addInfo('PixelArtClient:server url', 1, '');"));
-		oappend(SET_F("addInfo('PixelArtClient:client id', 1, '');"));
+		oappend(SET_F("addInfo('PixelArtClient:screen id', 1, '');"));
+		oappend(SET_F("addInfo('PixelArtClient:api key', 1, '');"));
 		oappend(SET_F("addField('PixelArtClient:transparent', 1, true);"));
 	}
 
