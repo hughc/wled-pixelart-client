@@ -1,7 +1,7 @@
 # Pixel Art Client usermod
 
 ## Description
-This usermod is a client built to request images from a [custom server](https://github.com/hughc/pixel-art-server). It can perform cross fades between images, and understands multi-fframe images.
+This usermod is a client built to request images from the [Pixelart exchange](https://app.pixelart-exchange.au/) or a [custom server](https://github.com/hughc/pixel-art-server). It can perform cross fades between images, does 8-bit transparency over other WLED effects, and understands multi-frame images (memory limitations apply).
 
 Due to limitations in the way that WLED handles refreshes, you need to select an effect to get higher frame rates. The usermod includes a custom effect (Pixel Art) that does nothing, but ups the refresh rate and improve cross-fade performance. Select it, and drag the Transition Speed slider to the right to speed up redraw performance.
 
