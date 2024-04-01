@@ -23,7 +23,14 @@ These instructions assume that you are already comfortable with compiling WLED f
 
     ```
     #ifdef PIXELART_CLIENT_ENABLED
+    #if defined(ESP8266)
+    #include <ESP8266WiFi.h>        // Include the Wi-Fi library
+    #include <ESP8266HTTPClient.h>
+    #else
+    #include <WiFi.h>
     #include <HTTPClient.h>
+    #endif
+    #include <WiFiUdp.h>
     #include "../usermods/pixelart_client/usermod_pixelart_client.cpp"
     #endif
     ```

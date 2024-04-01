@@ -1,14 +1,20 @@
 #pragma once
 
 #include <Arduino.h>
+#if defined(ESP8266)
+#include <ESP8266WiFi.h>        // Include the Wi-Fi library
+#include <ESP8266WiFiMulti.h>
+#include <ESP8266HTTPClient.h>
+#else
 #include <WiFi.h>
 #include <WiFiMulti.h>
+#include <HTTPClient.h>
+#endif
+#include <WiFiUdp.h>
 #include <FastLED.h>
 #include <wled.h>
 #include <FX.h>
 
-
-#include <HTTPClient.h>
 
 #include <stdio.h>
 #include <string.h>
@@ -158,7 +164,7 @@ private:
 	String clientName = "WLED";
 	bool transparency = false;
 	bool serverUp = false;
-	int serverTestRepeatTime = 10;
+	long unsigned int serverTestRepeatTime = 10;
 
 	// These config variables have defaults set inside readFromConfig()
 	int testInt;
@@ -186,7 +192,7 @@ private:
 	int currentFrameIndex = 0;
 	// within the image, we may have one or more frames
 	std::vector<std::vector<CRGBA>> currentFrame;
-	int currentFrameDuration;
+ unsigned int currentFrameDuration;
 	// within the next image,cache the first frame for a transition
 	std::vector<std::vector<CRGBA>> nextFrame;
 	int nextBlend = 0;
@@ -194,11 +200,12 @@ private:
 	// time betwwen images
 	int duration;
 	// in seconds
-	int imageDuration = 10;
+	unsigned int imageDuration = 10;
 	bool imageLoaded = false;
 	int imageIndex = 0;
 
 	HTTPClient http;
+	WiFiClient client;
 
 	String playlist;
 	String name;
@@ -256,6 +263,7 @@ public:
 	{
 		// Your Domain name with URL path or IP address with path
 
+
 		currentImage = imageIndex ? &image1 : &image2;
 		nextImage = imageIndex ? &image2 : &image1;
 		currentImageDurations = imageIndex ? &image1durations : &image2durations;
@@ -271,7 +279,7 @@ public:
 
 		Serial.print("requestImageFrames: ");
 		Serial.println(getUrl);
-		http.begin((getUrl).c_str());
+		http.begin(client, (getUrl).c_str());
 
 		// Send HTTP GET request, turn back to http 1.0 for streaming
 		http.useHTTP10(true);
@@ -309,10 +317,10 @@ public:
 			return;
 		}
 
-		const int totalFrames = doc["frames"];
+		const unsigned int totalFrames = doc["frames"];
 		nextImageBackgroundColour = hexToCRGB(doc["backgroundColor"]);
-		const int returnHeight = doc["height"];
-		const int returnWidth = doc["width"];
+		const unsigned int returnHeight = doc["height"];
+		const unsigned int returnWidth = doc["width"];
 		const char *path = doc["path"]; // "ms-pacman.gif"
 		name = String(path);
 
@@ -549,7 +557,7 @@ public:
 		const String height = String(strip._segments[strip.getCurrSegmentId()].maxHeight);
 		const String getUrl = serverName + (serverName.endsWith("/") ? "api/client/checkin?id=" : "/api/client/checkin?id=") + clientName + "&width=" + width + "&height=" + height;
 		Serial.println(getUrl);
-		http.begin((getUrl).c_str());
+		http.begin(client, (getUrl).c_str());
 
 		// Send HTTP GET request
 		int httpResponseCode = http.GET();
