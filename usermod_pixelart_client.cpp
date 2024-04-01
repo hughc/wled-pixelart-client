@@ -635,14 +635,14 @@ public:
 				CRGB finalColour;
 				if (transparency)
 				{
-					CRGB existing = strip.getPixelColorXY(whichRow, whichCol);
+					CRGB existing = strip.getPixelColorXY(whichCol, whichRow);
 					finalColour = flatten(pixel, existing);
 				}
 				else
 				{
 					finalColour = flatten(pixel, backgroundColour);
 				}
-				strip.setPixelColorXY(whichRow, whichCol, finalColour);
+				strip.setPixelColorXY(whichCol, whichRow, finalColour);
 				whichCol++;
 			}
 			whichRow++;
@@ -664,14 +664,14 @@ public:
 				CRGB finalColour;
 				if (transparency)
 				{
-				CRGB existing = strip.getPixelColorXY(whichRow, whichCol);
+				CRGB existing = strip.getPixelColorXY(whichCol, whichRow);
 				 finalColour = flatten(newPixel, existing);
 				}
 				else
 				{
 					finalColour = flatten(newPixel, backgroundColour);
 				}
-				strip.setPixelColorXY(whichRow, whichCol, finalColour);
+				strip.setPixelColorXY(whichCol, whichRow, finalColour);
 				whichCol++;
 			}
 			whichRow++;
